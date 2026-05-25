@@ -49,14 +49,15 @@ type ProvidersConfig struct {
 	Baidu     BaiduConfig
 }
 
+// ProviderConfig holds per-provider infrastructure settings.
+// API keys are NOT stored here — they live in the model_credentials DB table
+// and are selected per-request by the credential.Selector.
 type ProviderConfig struct {
-	APIKey  string `mapstructure:"api_key"`
 	BaseURL string `mapstructure:"base_url"`
 }
 
 type BaiduConfig struct {
-	APIKey    string `mapstructure:"api_key"`
-	SecretKey string `mapstructure:"secret_key"`
+	// Placeholder for future Baidu provider; API keys come from model_credentials.
 }
 
 func Load() *Config {

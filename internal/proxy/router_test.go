@@ -1,26 +1,56 @@
 package proxy
 
 import (
+	"context"
 	"testing"
 
 	"github.com/yourorg/llmgw/internal/config"
+	"github.com/yourorg/llmgw/internal/domain"
 	"github.com/yourorg/llmgw/internal/proxy/providers"
 )
 
+// stubModelsLister returns a fixed model list for router tests.
+type stubModelsLister struct {
+	models []domain.Model
+}
+
+func (s *stubModelsLister) ListActive(_ context.Context) ([]domain.Model, error) {
+	return s.models, nil
+}
+
 func newTestRouter() *Router {
 	cfg := &config.Config{} // empty config: no real API keys needed
-	return NewRouter(cfg)
+	r, err := NewRouter(cfg, nil)
+	if err != nil {
+		panic(err)
+	}
+	return r
+}
+
+func newTestRouterWithDB() *Router {
+	cfg := &config.Config{}
+	repo := &stubModelsLister{models: []domain.Model{
+		{ID: "gpt-4o", Provider: "openai"},
+		{ID: "claude-haiku-4-5", Provider: "anthropic"},
+		{ID: "deepseek-v3", Provider: "deepseek"},
+		{ID: "qwen-max", Provider: "alibaba"},
+	}}
+	r, err := NewRouter(cfg, repo)
+	if err != nil {
+		panic(err)
+	}
+	return r
 }
 
 func TestRouterGet_KnownModels(t *testing.T) {
-	r := newTestRouter()
+	r := newTestRouterWithDB()
 
 	known := []string{
 		"mock",
-		"gpt-4o", "gpt-4o-mini",
-		"claude-3-5-sonnet", "claude-3-haiku", "claude-haiku-4-5",
-		"deepseek-v3", "deepseek-r1",
-		"qwen-max", "qwen-plus",
+		"gpt-4o",
+		"claude-haiku-4-5",
+		"deepseek-v3",
+		"qwen-max",
 	}
 	for _, m := range known {
 		p, err := r.Get(m)
@@ -56,10 +86,10 @@ func TestRouterRegister(t *testing.T) {
 }
 
 func TestRouterRegister_Override(t *testing.T) {
-	r := newTestRouter()
+	r := newTestRouterWithDB()
 	custom := providers.NewMockProvider()
 	custom.Response = "overridden"
-	r.Register("gpt-4o", custom)
+	r.Register("gpt-4o", custom) // gpt-4o is registered via DB in this router
 
 	p, err := r.Get("gpt-4o")
 	if err != nil {

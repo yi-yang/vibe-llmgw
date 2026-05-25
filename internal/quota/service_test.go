@@ -211,10 +211,11 @@ func TestService_TryDeduct_RepoError(t *testing.T) {
 // ---- Check → Deduct sequential flow ----
 
 func TestService_CheckThenDeduct_QuotaDecreases(t *testing.T) {
+	resetDate := time.Now().AddDate(0, 1, 0)
 	q := &domain.UserQuota{
 		QuotaTokens: 1000,
 		UsedTokens:  900,
-		ResetDate:   time.Now().AddDate(0, 1, 0),
+		ResetDate:   &resetDate,
 	}
 	repo := &stubRepo{quota: q}
 	svc := newService(repo)

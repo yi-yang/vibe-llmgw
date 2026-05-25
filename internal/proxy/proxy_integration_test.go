@@ -90,7 +90,10 @@ func (f *fixedCredSel) Pick(_ context.Context, _, _ string) (*domain.ModelCreden
 // newIntegrationEngine wires a real Handler + real Router (mock provider registered).
 // Returns the engine and router so individual tests can call router.Register if needed.
 func newIntegrationEngine(q QuotaService, saver ChatSaver) (*gin.Engine, *Router) {
-	router := NewRouter(&config.Config{})
+	router, err := NewRouter(&config.Config{}, nil)
+	if err != nil {
+		panic("NewRouter in integration test: " + err.Error())
+	}
 	h := &Handler{quotaSvc: q, chatSave: saver, router: router, credSel: &fixedCredSel{}}
 
 	engine := gin.New()

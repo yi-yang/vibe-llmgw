@@ -128,8 +128,7 @@ func (r *mockQuotaRepo) ListByUser(_ context.Context, userID string) ([]domain.U
 	return result, nil
 }
 
-// Ensure mockQuotaRepo satisfies quota.Repository interface
-var _ quota.Repository = (*mockQuotaRepo)(nil)
+// mockQuotaRepo satisfies quota.NewService's unexported quotaRepo interface (Get / Deduct / TryDeduct).
 
 // mockChatSaver is an in-memory chat log saver for testing.
 type mockChatSaver struct {
@@ -353,32 +352,37 @@ func newTestEnv(t *testing.T, opts ...func(*testEnv)) *testEnv {
 	}
 
 	cfg := &config.Config{Env: "test"}
-	env.router = proxy.NewRouter(cfg)
+	var err error
+	env.router, err = proxy.NewRouter(cfg, nil)
+	if err != nil {
+		panic("NewRouter in blackbox test: " + err.Error())
+	}
 	env.router.Register("mock", providers.NewMockProvider())
 
 	// Build handler dependencies
 	quotaSvc := quota.NewService(env.quotaRepo)
 
-	// Create proxy handler using the constructor
-	proxyHandler := proxy.NewHandler(cfg, quotaSvc, env.chatSaver, env.credSel)
+	// Create proxy handler using the constructor (nil ModelsLister: models registered manually)
+	proxyHandler, err := proxy.NewHandler(cfg, quotaSvc, env.chatSaver, env.credSel, nil)
+	if err != nil {
+		t.Fatalf("NewHandler: %v", err)
+	}
 
 	// Create auth handler
 	authHandler := auth.NewHandler(cfg, nil)
 
 	// Build router
 	r := gin.New()
-	r.Use(middleware.JWTAuth(testJWTSecret))
 
-	// Auth routes (no auth required - placed before JWT middleware applies)
-	authGroup := r.Group("")
+	// Auth routes (no auth required)
 	{
-		authGroup.GET("/auth/login", authHandler.Login)
-		authGroup.GET("/auth/callback", authHandler.Callback)
-		authGroup.POST("/auth/logout", authHandler.Logout)
+		r.GET("/auth/login", authHandler.Login)
+		r.GET("/auth/callback", authHandler.Callback)
+		r.POST("/auth/logout", authHandler.Logout)
 	}
 
 	// API routes (auth required)
-	apiGroup := r.Group("/api")
+	apiGroup := r.Group("/api", middleware.JWTAuth(testJWTSecret))
 	{
 		apiGroup.GET("/models", env.listModels)
 		apiGroup.GET("/quota", env.listQuota)
@@ -952,9 +956,10 @@ func TestSessions_GetSession_InvalidUUID(t *testing.T) {
 
 func TestRouter_KnownModels(t *testing.T) {
 	cfg := &config.Config{Env: "test"}
-	r := proxy.NewRouter(cfg)
+	r, _ := proxy.NewRouter(cfg, nil)
 
-	models := []string{"mock", "gpt-4o", "gpt-4o-mini", "claude-3-5-sonnet", "claude-haiku-4-5", "deepseek-v3", "deepseek-r1", "qwen-max", "qwen-plus"}
+	// Only mock is auto-registered when no DB lister is provided.
+	models := []string{"mock"}
 	for _, m := range models {
 		_, err := r.Get(m)
 		if err != nil {
@@ -965,7 +970,7 @@ func TestRouter_KnownModels(t *testing.T) {
 
 func TestRouter_UnknownModel(t *testing.T) {
 	cfg := &config.Config{Env: "test"}
-	r := proxy.NewRouter(cfg)
+	r, _ := proxy.NewRouter(cfg, nil)
 
 	_, err := r.Get("unknown-model")
 	if err == nil {
@@ -975,7 +980,7 @@ func TestRouter_UnknownModel(t *testing.T) {
 
 func TestRouter_Register(t *testing.T) {
 	cfg := &config.Config{Env: "test"}
-	r := proxy.NewRouter(cfg)
+	r, _ := proxy.NewRouter(cfg, nil)
 	custom := providers.NewMockProvider()
 
 	r.Register("custom-model", custom)
@@ -991,7 +996,7 @@ func TestRouter_Register(t *testing.T) {
 
 func TestRouter_Override(t *testing.T) {
 	cfg := &config.Config{Env: "test"}
-	r := proxy.NewRouter(cfg)
+	r, _ := proxy.NewRouter(cfg, nil)
 	custom := &providers.MockProvider{Response: "custom response"}
 
 	r.Register("mock", custom)

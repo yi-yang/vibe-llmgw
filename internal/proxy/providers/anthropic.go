@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -257,9 +258,11 @@ func (p *AnthropicProvider) streamWithWriter(
 
 	go func() {
 		bgCtx := context.Background()
-		_ = q.Deduct(bgCtx, userID, req.Model, total)
+		if err := q.Deduct(bgCtx, userID, req.Model, total); err != nil {
+			log.Printf("post-stream quota deduct failed (anthropic): user=%s model=%s tokens=%d err=%v", userID, req.Model, total, err)
+		}
 		responseAt := time.Now()
-		_ = logger.Save(bgCtx, &domain.ChatLog{
+		if err := logger.Save(bgCtx, &domain.ChatLog{
 			ID:              uuid.New(),
 			UserID:          userID,
 			SessionID:       sessionID,
@@ -272,6 +275,8 @@ func (p *AnthropicProvider) streamWithWriter(
 			OutputTokens:    outputTokens,
 			Status:          "success",
 			CredentialID:    &cred.ID,
-		})
+		}); err != nil {
+			log.Printf("post-stream chat log save failed (anthropic): user=%s model=%s err=%v", userID, req.Model, err)
+		}
 	}()
 }

@@ -1,9 +1,12 @@
 package proxy
 
 import (
+	"context"
 	"fmt"
+	"log"
 
 	"github.com/yourorg/llmgw/internal/config"
+	"github.com/yourorg/llmgw/internal/domain"
 	"github.com/yourorg/llmgw/internal/proxy/providers"
 )
 
@@ -12,11 +15,21 @@ type Provider interface {
 	providers.Provider
 }
 
+// ModelsLister is the interface NewRouter uses to discover active models.
+// *model.Repository satisfies it; pass nil to skip DB loading (test mode).
+type ModelsLister interface {
+	ListActive(ctx context.Context) ([]domain.Model, error)
+}
+
 type Router struct {
 	routes map[string]Provider
 }
 
-func NewRouter(cfg *config.Config) *Router {
+// NewRouter creates a Router with provider instances wired from config.
+// When modelRepo is non-nil, active models are loaded from the database
+// and mapped to providers via the models.provider column.
+// The mock provider is always registered in non-production environments.
+func NewRouter(cfg *config.Config, modelRepo ModelsLister) (*Router, error) {
 	r := &Router{routes: make(map[string]Provider)}
 
 	// mock provider — only in non-production environments
@@ -24,27 +37,37 @@ func NewRouter(cfg *config.Config) *Router {
 		r.routes["mock"] = providers.NewMockProvider()
 	}
 
+	// Create provider instances from infrastructure config.
+	// API keys are NOT read from config — they come from model_credentials via CredentialSelector.
 	openai := providers.NewOpenAIProvider(cfg.Providers.OpenAI.BaseURL, cfg.Proxy)
-	for _, m := range []string{"gpt-4o", "gpt-4o-mini"} {
-		r.routes[m] = openai
-	}
-
 	anthropic := providers.NewAnthropicProvider(cfg.Proxy)
-	for _, m := range []string{"claude-3-5-sonnet", "claude-3-haiku", "claude-haiku-4-5"} {
-		r.routes[m] = anthropic
-	}
-
 	deepseek := providers.NewOpenAIProvider(cfg.Providers.DeepSeek.BaseURL, cfg.Proxy)
-	for _, m := range []string{"deepseek-v3", "deepseek-r1"} {
-		r.routes[m] = deepseek
-	}
-
 	alibaba := providers.NewOpenAIProvider(cfg.Providers.Alibaba.BaseURL, cfg.Proxy)
-	for _, m := range []string{"qwen-max", "qwen-plus"} {
-		r.routes[m] = alibaba
+
+	// Load model→provider mappings from the database (single source of truth).
+	// Skip when modelRepo is nil — callers register models manually via Router.Register.
+	if modelRepo != nil {
+		models, err := modelRepo.ListActive(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("failed to load models from database: %w", err)
+		}
+		for _, m := range models {
+			switch m.Provider {
+			case "openai":
+				r.routes[m.ID] = openai
+			case "anthropic":
+				r.routes[m.ID] = anthropic
+			case "deepseek":
+				r.routes[m.ID] = deepseek
+			case "alibaba":
+				r.routes[m.ID] = alibaba
+			default:
+				log.Printf("router: skipping model %q with unknown provider %q", m.ID, m.Provider)
+			}
+		}
 	}
 
-	return r
+	return r, nil
 }
 
 func (r *Router) Get(modelID string) (Provider, error) {

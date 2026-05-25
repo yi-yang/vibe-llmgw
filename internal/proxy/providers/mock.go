@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -68,8 +69,10 @@ func (p *MockProvider) Stream(c *gin.Context, userID string, req *domain.ChatReq
 
 	go func() {
 		ctx := context.Background()
-		_ = q.Deduct(ctx, userID, req.Model, inputTokens+outputTokens)
-		_ = logger.Save(ctx, &domain.ChatLog{
+		if err := q.Deduct(ctx, userID, req.Model, inputTokens+outputTokens); err != nil {
+			log.Printf("post-stream quota deduct failed (mock): user=%s model=%s tokens=%d err=%v", userID, req.Model, inputTokens+outputTokens, err)
+		}
+		if err := logger.Save(ctx, &domain.ChatLog{
 			ID:              uuid.New(),
 			UserID:          userID,
 			SessionID:       sessionID,
@@ -82,7 +85,9 @@ func (p *MockProvider) Stream(c *gin.Context, userID string, req *domain.ChatReq
 			OutputTokens:    outputTokens,
 			Status:          "success",
 			CredentialID:    &cred.ID,
-		})
+		}); err != nil {
+			log.Printf("post-stream chat log save failed (mock): user=%s model=%s err=%v", userID, req.Model, err)
+		}
 	}()
 }
 

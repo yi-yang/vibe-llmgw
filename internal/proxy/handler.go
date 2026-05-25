@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -43,13 +44,17 @@ type Handler struct {
 	credSel    CredentialSelector
 }
 
-func NewHandler(cfg *config.Config, quotaSvc QuotaService, chatSave ChatSaver, credSel CredentialSelector) *Handler {
+func NewHandler(cfg *config.Config, quotaSvc QuotaService, chatSave ChatSaver, credSel CredentialSelector, modelRepo ModelsLister) (*Handler, error) {
+	router, err := NewRouter(cfg, modelRepo)
+	if err != nil {
+		return nil, err
+	}
 	return &Handler{
 		quotaSvc: quotaSvc,
 		chatSave: chatSave,
-		router:   NewRouter(cfg),
+		router:   router,
 		credSel:  credSel,
-	}
+	}, nil
 }
 
 // newHandlerWithRouter is used in tests to inject a custom router and selector.
@@ -66,20 +71,20 @@ func (h *Handler) Chat(c *gin.Context) {
 		return
 	}
 
-	// 1. Check quota
+	// 1. Route to provider — validate model exists before anything else
+	provider, err := h.router.Get(req.Model)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported model"})
+		return
+	}
+
+	// 2. Check quota
 	if err := h.quotaSvc.Check(c.Request.Context(), userID, req.Model); err != nil {
 		if errors.Is(err, quota.ErrQuotaExceeded) {
 			c.JSON(http.StatusForbidden, gin.H{"error": "quota exceeded"})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// 2. Route to provider
-	provider, err := h.router.Get(req.Model)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported model"})
 		return
 	}
 
@@ -109,8 +114,10 @@ func (h *Handler) Chat(c *gin.Context) {
 	sessionID, _ := uuid.Parse(req.SessionID)
 	go func() {
 		ctx := context.Background()
-		_ = h.quotaSvc.Deduct(ctx, userID, req.Model, resp.Usage.TotalTokens)
-		_ = h.chatSave.Save(ctx, &domain.ChatLog{
+		if err := h.quotaSvc.Deduct(ctx, userID, req.Model, resp.Usage.TotalTokens); err != nil {
+			log.Printf("post-request quota deduct failed: user=%s model=%s tokens=%d err=%v", userID, req.Model, resp.Usage.TotalTokens, err)
+		}
+		if err := h.chatSave.Save(ctx, &domain.ChatLog{
 			ID:              uuid.New(),
 			UserID:          userID,
 			SessionID:       sessionID,
@@ -123,7 +130,9 @@ func (h *Handler) Chat(c *gin.Context) {
 			OutputTokens:    resp.Usage.OutputTokens,
 			Status:          "success",
 			CredentialID:    &cred.ID,
-		})
+		}); err != nil {
+			log.Printf("post-request chat log save failed: user=%s model=%s err=%v", userID, req.Model, err)
+		}
 	}()
 
 	c.JSON(http.StatusOK, resp)

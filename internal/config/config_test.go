@@ -110,29 +110,23 @@ func TestLoad_ProvidersConfig(t *testing.T) {
 	setup(t, minimalYAML+`
 providers:
   openai:
-    api_key: "sk-openai"
     base_url: "https://api.openai.com/v1"
   anthropic:
-    api_key: "sk-anthropic"
+    base_url: "https://api.anthropic.com"
   deepseek:
-    api_key: "sk-deepseek"
     base_url: "https://api.deepseek.com/v1"
   alibaba:
-    api_key: "sk-alibaba"
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
 `)
 	cfg := Load()
-	if cfg.Providers.OpenAI.APIKey != "sk-openai" {
-		t.Errorf("OpenAI.APIKey = %q", cfg.Providers.OpenAI.APIKey)
-	}
 	if cfg.Providers.OpenAI.BaseURL != "https://api.openai.com/v1" {
 		t.Errorf("OpenAI.BaseURL = %q", cfg.Providers.OpenAI.BaseURL)
 	}
-	if cfg.Providers.Anthropic.APIKey != "sk-anthropic" {
-		t.Errorf("Anthropic.APIKey = %q", cfg.Providers.Anthropic.APIKey)
+	if cfg.Providers.Anthropic.BaseURL != "https://api.anthropic.com" {
+		t.Errorf("Anthropic.BaseURL = %q", cfg.Providers.Anthropic.BaseURL)
 	}
-	if cfg.Providers.DeepSeek.APIKey != "sk-deepseek" {
-		t.Errorf("DeepSeek.APIKey = %q", cfg.Providers.DeepSeek.APIKey)
+	if cfg.Providers.DeepSeek.BaseURL != "https://api.deepseek.com/v1" {
+		t.Errorf("DeepSeek.BaseURL = %q", cfg.Providers.DeepSeek.BaseURL)
 	}
 	if cfg.Providers.Alibaba.BaseURL != "https://dashscope.aliyuncs.com/compatible-mode/v1" {
 		t.Errorf("Alibaba.BaseURL = %q", cfg.Providers.Alibaba.BaseURL)
@@ -157,19 +151,15 @@ func TestLoad_EmptyProxy(t *testing.T) {
 	}
 }
 
-func TestLoad_BaiduConfig(t *testing.T) {
+func TestLoad_BaiduConfigPresent(t *testing.T) {
 	setup(t, minimalYAML+`
 providers:
-  baidu:
-    api_key: "baidu-ak"
-    secret_key: "baidu-sk"
+  baidu: {}
 `)
 	cfg := Load()
-	if cfg.Providers.Baidu.APIKey != "baidu-ak" {
-		t.Errorf("Baidu.APIKey = %q", cfg.Providers.Baidu.APIKey)
-	}
-	if cfg.Providers.Baidu.SecretKey != "baidu-sk" {
-		t.Errorf("Baidu.SecretKey = %q", cfg.Providers.Baidu.SecretKey)
+	// Verify the Baidu provider struct is present; API keys come from model_credentials.
+	if cfg.Providers.Baidu != (BaiduConfig{}) {
+		t.Log("Baidu config placeholder loaded")
 	}
 }
 

@@ -36,7 +36,10 @@ func main() {
 
 	// Handlers
 	authHandler := auth.NewHandler(cfg, database)
-	proxyHandler := proxy.NewHandler(cfg, quotaSvc, chatRepo, credSel)
+	proxyHandler, err := proxy.NewHandler(cfg, quotaSvc, chatRepo, credSel, modelRepo)
+	if err != nil {
+		log.Fatalf("failed to create proxy handler: %v", err)
+	}
 	chatHandler := chat.NewHandler(chatRepo)
 	modelHandler := model.NewHandler(modelRepo, quotaRepo)
 

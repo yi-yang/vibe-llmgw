@@ -179,15 +179,10 @@ func TestSystem_Middleware_WrongSecret(t *testing.T) {
 
 func TestSystem_Router_KnownModels(t *testing.T) {
 	cfg := &config.Config{Env: "development"}
-	r := proxy.NewRouter(cfg)
+	r, _ := proxy.NewRouter(cfg, nil)
 
-	models := []string{
-		"mock",
-		"gpt-4o", "gpt-4o-mini",
-		"claude-3-5-sonnet", "claude-3-haiku", "claude-haiku-4-5",
-		"deepseek-v3", "deepseek-r1",
-		"qwen-max", "qwen-plus",
-	}
+	// Only mock is auto-registered when no DB lister is provided.
+	models := []string{"mock"}
 
 	for _, m := range models {
 		p, err := r.Get(m)
@@ -202,7 +197,7 @@ func TestSystem_Router_KnownModels(t *testing.T) {
 
 func TestSystem_Router_UnknownModel(t *testing.T) {
 	cfg := &config.Config{Env: "development"}
-	r := proxy.NewRouter(cfg)
+	r, _ := proxy.NewRouter(cfg, nil)
 
 	_, err := r.Get("unknown-model")
 	if err == nil {
@@ -212,7 +207,7 @@ func TestSystem_Router_UnknownModel(t *testing.T) {
 
 func TestSystem_Router_Register(t *testing.T) {
 	cfg := &config.Config{Env: "development"}
-	r := proxy.NewRouter(cfg)
+	r, _ := proxy.NewRouter(cfg, nil)
 	mock := providers.NewMockProvider()
 
 	r.Register("custom", mock)
@@ -228,7 +223,7 @@ func TestSystem_Router_Register(t *testing.T) {
 
 func TestSystem_Router_Override(t *testing.T) {
 	cfg := &config.Config{Env: "development"}
-	r := proxy.NewRouter(cfg)
+	r, _ := proxy.NewRouter(cfg, nil)
 	custom := &providers.MockProvider{Response: "custom"}
 
 	r.Register("gpt-4o", custom)
@@ -417,12 +412,12 @@ func TestSystem_Config_Fields(t *testing.T) {
 func TestSystem_Config_ProviderConfig(t *testing.T) {
 	cfg := &config.Config{
 		Providers: config.ProvidersConfig{
-			OpenAI:    config.ProviderConfig{APIKey: "sk-openai", BaseURL: "https://api.openai.com/v1"},
-			Anthropic: config.ProviderConfig{APIKey: "sk-anthropic"},
+			OpenAI:    config.ProviderConfig{BaseURL: "https://api.openai.com/v1"},
+			Anthropic: config.ProviderConfig{},
 		},
 	}
-	if cfg.Providers.OpenAI.APIKey != "sk-openai" {
-		t.Error("OpenAI config not set")
+	if cfg.Providers.OpenAI.BaseURL != "https://api.openai.com/v1" {
+		t.Error("OpenAI BaseURL not set")
 	}
 }
 

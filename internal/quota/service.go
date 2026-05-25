@@ -23,7 +23,7 @@ type Service struct {
 	repo quotaRepo
 }
 
-func NewService(repo *Repository) *Service {
+func NewService(repo quotaRepo) *Service {
 	return &Service{repo: repo}
 }
 

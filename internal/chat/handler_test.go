@@ -124,7 +124,11 @@ func TestChatHandler_ListSessions_RepoError(t *testing.T) {
 func TestChatHandler_GetSession_OK(t *testing.T) {
 	sid := uuid.New()
 	logs := []domain.ChatLog{
-		{ID: uuid.New(), UserID: "alice", SessionID: sid, ModelID: "gpt-4o", Status: "success"},
+		{
+			ID: uuid.New(), UserID: "alice", SessionID: sid, ModelID: "gpt-4o", Status: "success",
+			RequestMessages: []byte(`[{"role":"user","content":"hi"}]`),
+			ResponseContent: "hello",
+		},
 	}
 	stub := &stubChatRepo{logs: logs}
 	h := newHandlerWithStub(stub)
@@ -136,13 +140,15 @@ func TestChatHandler_GetSession_OK(t *testing.T) {
 		t.Errorf("status = %d, want 200; body: %s", w.Code, w.Body.String())
 	}
 	var body struct {
-		Messages []domain.ChatLog `json:"messages"`
+		Messages []domain.Message `json:"messages"`
+		Model    string           `json:"model,omitempty"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if len(body.Messages) != 1 {
-		t.Errorf("messages count = %d, want 1", len(body.Messages))
+	// request_messages has 1 user msg + response_content becomes assistant → 2 total
+	if len(body.Messages) != 2 {
+		t.Errorf("messages count = %d, want 2", len(body.Messages))
 	}
 }
 

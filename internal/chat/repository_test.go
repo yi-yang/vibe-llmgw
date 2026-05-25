@@ -62,13 +62,14 @@ func seedModel(t *testing.T, db *pgxpool.Pool, modelID string) {
 }
 
 func newTestLog(userID string, sessionID uuid.UUID, modelID string) *domain.ChatLog {
+	now := time.Now()
 	return &domain.ChatLog{
 		ID:              uuid.New(),
 		UserID:          userID,
 		SessionID:       sessionID,
 		ModelID:         modelID,
-		RequestAt:       time.Now(),
-		ResponseAt:      time.Now(),
+		RequestAt:       now,
+		ResponseAt:      &now,
 		RequestMessages: []byte(`[{"role":"user","content":"hi"}]`),
 		ResponseContent: "hello",
 		InputTokens:     5,

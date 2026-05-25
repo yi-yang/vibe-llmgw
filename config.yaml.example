@@ -20,18 +20,18 @@ sso:
     agent_id: ""
     secret: ""
 
+# Provider API keys are NOT configured here.
+# Keys live in the model_credentials database table and are selected
+# per-request by the credential selector (round-robin or session-sticky).
+# See: db/migrations/005_create_model_credentials.sql
 providers:
   openai:
-    api_key: ""
     base_url: "https://api.openai.com/v1"
   anthropic:
-    api_key: ""
+    # Anthropic has a fixed endpoint; base_url is optional.
   deepseek:
-    api_key: ""
     base_url: "https://api.deepseek.com/v1"
   alibaba:
-    api_key: ""
     base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   baidu:
-    api_key: ""
-    secret_key: ""
+    # Placeholder for future Baidu provider.
